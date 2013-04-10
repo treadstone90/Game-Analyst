@@ -6,8 +6,11 @@ Summarization
 =============
 
 To run use 
-footballTwitter.twitter.GameAnalyst -t <terms to be summarized>
+
+footballTwitter.twitter.GameAnalyst -t "terms to be summarized"
+
 This will genrate candidates.txt 
+
 Then use 
 
 football.twitter.GameAnalyst.Main candidates.txt
