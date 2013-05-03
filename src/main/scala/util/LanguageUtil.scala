@@ -76,6 +76,8 @@ object English extends Language("eng") {
 
   lazy val stopwords = getLexicon("stopwords.english")
   lazy val vulgar = getLexicon("vulgar.txt.gz")
+  lazy val posWords = getLexicon("positive-words.txt.gz")
+  lazy val negWords = getLexicon("negative-words.txt.gz")
   lazy val stopwords_bot = getLexicon("stopwords.bot")
   lazy val vocabulary = getLexicon("masc_vocab.txt.gz") ++ stopwords
   lazy val thesaurus = Thesaurus.read(Resource.asStream("/lang/eng/lexicon/oo_eng_thesaurus.gz"))
@@ -291,10 +293,7 @@ abstract class OtherLexica (code: String) {
 
 }
 
-class Polarity extends OtherLexica("eng") {
-  lazy val posWords = getLexicon("positive-words.txt.gz")
-  lazy val negWords = getLexicon("negative-words.txt.gz")
-}
+
 
 
 // The CMU POSTAGGER
@@ -339,7 +338,5 @@ object Tagger {
   tagger.loadModel();
 
   def apply(str:String) = tagger.tokenizeAndTag(str);
-  
-    
+      
 }
-

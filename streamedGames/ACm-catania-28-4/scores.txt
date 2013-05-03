@@ -1,0 +1,13 @@
+pazzini : rating is 3.98146626631188961
+mexes : rating is 3.33333333333333351
+flamini : rating is 4.26072262083681
+balotelli : rating is 3.2371373587453991
+sharaawy : rating is 5.01
+abate : rating is 3.751
+sciglio : rating is 3.01
+muntari : rating is 4.1666666666666671
+montolivo : rating is 3.63461538461538461
+nocerino : rating is 1.66666666666666671
+boateng : rating is 3.17438271604938251
+amelia : rating is 2.7651515151515151
+niang : rating is 3.593751
