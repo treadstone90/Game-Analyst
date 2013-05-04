@@ -10,7 +10,8 @@ import footballTwitter.twitter._
 import org.rogach.scallop._
 import sys.process._
 import scala.io.Source
-
+import MessageStore._
+import scala.collection.mutable.ArrayBuffer
 
 
 
@@ -23,6 +24,8 @@ object MessageStore{
 	case class Rate(x:Int) // from counter to manager
 	case class Stream(terms:Array[String])
 	case class FullStatus(status:Status,JSON:String)
+	case class TaggedTweet(tag:String,tweet:String)
+	case class Payload(tweetList:ArrayBuffer[String])
 }
 
 
@@ -52,6 +55,8 @@ class Manager extends Actor with ActorLogging {
 	import MessageStore._
 
 	val streamManager = context.actorOf(Props[StreamManager],name ="StreamManager");
+	val summarizer = context.actorOf(Props[Summarizer],name ="Summarizer");
+	//val sentiAnalyzer = context.actorOf(Props[SentimentAnalyzer],name ="SentimentAnalyzer");
 
 	def receive ={
 		case Stream(terms) =>  println("hi"); streamManager ! Stream(terms)
@@ -84,7 +89,7 @@ class StreamManager extends Actor with ActorLogging with TermFilter
 		
 		case fullStatus : FullStatus => {
 
-	//	println(fullStatus.JSON)
+		//println(fullStatus.status.getText)
 		tweetCount = tweetCount +1
 		
 		counter ! fullStatus
@@ -98,53 +103,8 @@ class StreamManager extends Actor with ActorLogging with TermFilter
 
 
 }
-// we shud have two modes of operation for the below actor
-//one is normal mode, where it operates in just non bursty mode
-// Then there is a bursty mode. Which mode to operate on is mentioned
-//by the master. 
 
-// In the normal mode, it just gets random tweets and writes it to file
-// IN the burtsy mode , it doe sthe ssame right.
-// I realy think u need a more aggressive filter (or) u need to get a lot of tweets
-// store it in lucene and work with it later
-// But then this will not be real time summarization , which I think is fine. cos U really need to 
-// be workiing with enuf tweets so that u get good esults anyaay for summarization 
-// it simply doesnt make sense to work with less content of tweets
-// SO yeah I need to ue lucene to index tweets. 
-// Couple of things - one is to do with ratings and the other is summarizing
-// Then we need to visualize them. 
-//label propagation in twittter
-// so for now the idea is to just tag tje tweets with as whethere they are normal / 
-// burst ttweets. Cos i fgureed out that there are now so many tweets taht will be generated so it ownt be 
-// ap roble,
-// so juts have to tell how to tag the tweets
-
-/*trait TweetWriter {
-	import java.io.FileWriter
-	val wr = new FileWriter("tweets.txt");
-	def write(entry:String) 
-
-	rdef closeWriter() = wr.close;
-}*/
-
-abstract class TweetWriter(fileName:String) {
-	import java.io.FileWriter
-	val wr = new FileWriter(fileName)
-	def write(entry:String)
-	
-	def closeWriter() = wr.close;
-
-}
-/*
-trait MemoryTweetWriter {
-	
-	val tweetStore = scala.collection.mutable.IndexedSeq[String]();
-	def write(entry:String)
-
-}
-
-*/
-class Labeller extends TweetWriter("tweets.txt") with Actor with ActorLogging
+class Labeller extends Actor with ActorLogging
 {
 	import GameAnalyst._
 	import MessageStore._;
@@ -154,20 +114,26 @@ class Labeller extends TweetWriter("tweets.txt") with Actor with ActorLogging
 	var tag :String = "Normal"; 
 	var count:Int = 0;
 	var gameMinutes = 0;
-	
+	val aggregator = context.actorOf(Props[Aggregator],name ="Aggregator")
+
+
 	def receive = {
 		case fullstatus : FullStatus => 
 		{
-			if(Tweet.getLanguage(fullstatus) == "en" && !fullstatus.status.isRetweet && fullstatus.status.getMediaEntities == null)
+			println("rvd here")
+			if(Tweet.getLanguage(fullstatus) == "en" && !fullstatus.status.isRetweet && fullstatus.status.getMediaEntities.length == 0)
 			{
-				val normalizedTweet = English.removeNonLanguage(Tweet
-					.normalize(fullstatus.status.getText));
+				val normalizedTweet = English.removeNonLanguage(Tweet.normalize(fullstatus.status.getText));
 
-				val length = Twokenize(normalizedTweet).length;
 				val entry:String = gameMinutes+":"+count+":"+tag + "~~~~~~~~"+ normalizedTweet;
 
 				
-				if(Math.random <=0.5 && length > 3) write(entry);
+				if(Math.random <=0.7 && Twokenize(normalizedTweet).length > 3)
+				{
+					println("pushed to aggregator")
+					aggregator ! TaggedTweet(tag,normalizedTweet);
+				}
+
 			}
 		}
 
@@ -175,20 +141,49 @@ class Labeller extends TweetWriter("tweets.txt") with Actor with ActorLogging
 			tag = label;count = counter;gameMinutes=minute
 
 		case Shutdown => {
-			closeWriter()
 			context.stop(self)
+		}	
 	}
 }
 
-	def write(entry:String) 
-	{
-		wr.write(entry + "\n");
-		wr.flush
+class Aggregator extends Actor with ActorLogging
+{
+	val tweetsPot = scala.collection.mutable.ArrayBuffer[String]()
+	var prevTag = "";
+	def receive ={
+		case TaggedTweet(tag:String,tweet:String) => {
+			println("revd from labeller")
+			if(tag == prevTag)
+				tweetsPot.append(tweet);
+			else
+			{
+				println("sending for processing")
+				context.actorFor("../../../Summarizer")! Payload(tweetsPot.map(x=>x))
+				//SentimentAnalyzer ! Payload(tweetsPot.map(_))
+			}
+			prevTag = tag
+		}
 	}
+}
 
+class Summarizer extends Actor with ActorLogging
+{
+	def receive ={
+		case Payload(tweetList:ArrayBuffer[String]) => {
+			println("here received payload");
+			println(tweetList.length)
+		}
+	}
+}
 
-	override def postStop =closeWriter
-
+class SAnalyzer extends Actor with ActorLogging
+{
+	// issue one is how do I specify the player names.. I guess I would neeed to do do oti for all players
+	def receive = {
+		case Payload => {
+			//now extract the list and perform sentiment analyzsis
+		}
+	}
 }
 
 
@@ -256,7 +251,7 @@ class Counter extends Actor with ActorLogging {
 
 	implicit val ec = ExecutionContext.Implicits.global
 
-	context.system.scheduler.schedule(1000.millis,60000.millis,context.self, Report)
+	context.system.scheduler.schedule(1000.millis,20000.millis,context.self, Report)
 	var minute=0;
 	var counter=0;
 	val threshold = 500;
@@ -293,7 +288,14 @@ class Counter extends Actor with ActorLogging {
 	}
 }
 
+abstract class TweetWriter(fileName:String) {
+	import java.io.FileWriter
+	val wr = new FileWriter(fileName)
+	def write(entry:String)
 
+	def closeWriter() = wr.close;
+
+}
 
 class Locator extends TweetWriter("location.txt") with Actor with ActorLogging  
 {
