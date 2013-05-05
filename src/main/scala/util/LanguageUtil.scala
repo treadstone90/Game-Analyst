@@ -3,7 +3,8 @@ import cmu.arktweetnlp.impl.Model;
 import cmu.arktweetnlp.impl.ModelSentence;
 import cmu.arktweetnlp.impl.Sentence;
 import cmu.arktweetnlp.impl.features.FeatureExtractor;
-import tokenize.Twokenize
+import chalk.lang.eng.Twokenize
+import scala.collection.JavaConversions._;
 /**
  * Copyright 2013 Jason Baldridge
  * 
@@ -81,9 +82,10 @@ object English extends Language("eng") {
   lazy val stopwords_bot = getLexicon("stopwords.bot")
   lazy val vocabulary = getLexicon("masc_vocab.txt.gz") ++ stopwords
   lazy val thesaurus = Thesaurus.read(Resource.asStream("/lang/eng/lexicon/oo_eng_thesaurus.gz"))
+  lazy val personalPronouns = Set("i","me","you","we","us","my","mine","our","ours","your","yours","i'm","you're");
 
   def isEnglish(text: String) = {
-    val words = SimpleTokenizer(removeNonLanguage(text).toLowerCase)
+    val words = Twokenize(removeNonLanguage(text).toLowerCase)
     val count = words.count(vocabulary) 
     count > 1 && count.toDouble/words.length > .3
   }
@@ -94,15 +96,21 @@ object English extends Language("eng") {
       .replaceAll("\\s+"," ")
 
   def isSafe(text: String) =  {
-    val words = SimpleTokenizer(removeNonLanguage(text).toLowerCase)
+    val words = Twokenize(removeNonLanguage(text).toLowerCase)
     words.count(vulgar) == 0
   }
+  def isImperative(text:String) = (Tagger(text)(0).tag == "V")
+
+  def isPersonal(text:String) =  if(Twokenize(text).count(personalPronouns) > 0) true else false 
+
+  
+  
 
   // Use this to pull punctuation back next to the word before it.
   lazy val SpacePuncRE = """ ([\.!?,])""".r
 
   def synonymize(text: String) = {
-    val synTokens = SimpleTokenizer(text).map { token => {
+    val synTokens = Twokenize (text).map { token => {
       if (!stopwords(token)) {
         val syns = thesaurus.synonyms(token)
         val numSyns = syns.size
@@ -307,7 +315,7 @@ class Tagger(fileName:String) {
   }
 
   def tokenizeAndTag(tweet:String): IndexedSeq[TaggedToken]={
-    val tokens = Twokenize.tokenizeRawTweetText(tweet);
+    val tokens = Twokenize(tweet);
     val sentence = new Sentence();
     sentence.tokens = tokens;
     val ms:ModelSentence = new ModelSentence(sentence.T());
@@ -319,7 +327,7 @@ class Tagger(fileName:String) {
     for (t <- 0 to sentence.T() -1)
     {
 
-      val tt = new TaggedToken(tokens.get(t), model.labelVocab.name(ms.labels(t)));
+      val tt = new TaggedToken(tokens(t), model.labelVocab.name(ms.labels(t)));
       taggedTokens += tt;
     }
 

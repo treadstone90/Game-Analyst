@@ -33,3 +33,16 @@ case class TweetInfo(
 	)
 
 
+object JaccardSimilarity
+{
+	def apply(str1:String,str2:String):Double ={
+		//println(str1 + " ~~~~~" + str2);
+		val shingled1 = str1.toIndexedSeq.sliding(4).toSet;
+		val shingled2 = str2.toIndexedSeq.sliding(4).toSet;
+
+		val intersect = shingled1.intersect(shingled2);
+		val union = shingled1.union(shingled2);
+
+		1.0*intersect.size/union.size;
+	}
+}

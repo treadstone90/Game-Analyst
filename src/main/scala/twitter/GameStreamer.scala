@@ -25,7 +25,9 @@ object MessageStore{
 	case class Stream(terms:Array[String])
 	case class FullStatus(status:Status,JSON:String)
 	case class TaggedTweet(tag:String,tweet:String)
-	case class Payload(tweetList:ArrayBuffer[String])
+	case class Payload(tweetList:IndexedSeq[String])
+	case class Summary(summaries:IndexedSeq[String])
+	case class PlayerScores(playerScores: Map[String,Double])
 }
 
 
@@ -40,28 +42,86 @@ object GameAnalyst
 	val system = ActorSystem("Analyst");
 		val conf  = new Conf(args);
 		val terms = conf.terms().toArray
-		println(terms);
-		val ids = conf.ids()
+	//	val ids = conf.ids()
+		val players = conf.players();
 
-		
-		val manager = system.actorOf(Props[Manager],name ="Manager");
+				
+		val manager = system.actorOf(Props(new Manager(players)),name ="Manager");
 		manager ! Stream(terms);
 		
 	}
 }
 
-class Manager extends Actor with ActorLogging {	
+
+class Manager(players:List[String]) extends Actor with ActorLogging {	
 	import GameAnalyst._;	
 	import MessageStore._
 
 	val streamManager = context.actorOf(Props[StreamManager],name ="StreamManager");
 	val summarizer = context.actorOf(Props[Summarizer],name ="Summarizer");
-	//val sentiAnalyzer = context.actorOf(Props[SentimentAnalyzer],name ="SentimentAnalyzer");
+	val sentiAnalyzer = context.actorOf(Props(new SAnalyzer(players)),name ="SAnalyzer");
+	val renderer = context.actorOf(Props[Renderer],name ="Renderer");
+
 
 	def receive ={
-		case Stream(terms) =>  println("hi"); streamManager ! Stream(terms)
+		case Stream(terms) => streamManager ! Stream(terms)
 
 	}
+}
+
+class Renderer extends Actor with ActorLogging {
+	import java.io.FileWriter
+	import footballTwitter.util.JaccardSimilarity
+	import scala.util.control.Breaks._
+
+	val summary = scala.collection.mutable.ArrayBuffer[String]();
+	val wrSum = new FileWriter("rtSummary.txt");
+	val wrSenti = new FileWriter("scores.txt");
+
+	def receive =
+	{
+
+		case Summary(candidates:IndexedSeq[String]) => {
+			println("1got payload");
+			
+			if(summary.length ==0)
+			{
+				summary += candidates.head;
+				wrSum.write(candidates.head + "\n")
+				
+			}
+			else
+			{
+				val newCandidates = candidates.filterNot(hasDuplicate)
+				if(newCandidates.length > 0) {
+					summary += newCandidates.head
+					wrSum.write(newCandidates.head +"\n")
+				}
+			}
+			wrSum.flush
+			
+		}
+
+		
+
+		case PlayerScores(playerScores: Map[String,Double]) => {
+			playerScores.foreach{ case(key,value) => 
+				wrSenti.write(key + ";" + value);
+				wrSenti.flush
+			}
+		}
+	}
+
+	def hasDuplicate(candidate:String) ={
+		val similarityScores= summary.map(tweet=> JaccardSimilarity(candidate,tweet))
+		val duplicates = similarityScores.count(score => score >0.5);
+		
+		if(duplicates > 0) true else false
+
+
+	}
+
+	override def postStop = wrSum.close ; wrSenti.close
 }
 
 class StreamManager extends Actor with ActorLogging with TermFilter
@@ -71,15 +131,14 @@ class StreamManager extends Actor with ActorLogging with TermFilter
 
 	val streamer = new Streamer(context.self);
 	val locator = context.actorOf(Props[Locator], name ="Locator")
-	val counter = context.actorOf(Props[Counter], name ="Counter")
-	val selector = context.actorOf(Props[SummarizationCandidates],name ="SummarizationCandidates")
-	val labeller = context.actorOf(Props[Labeller],name ="Labeller")
+	val labeller = context.actorOf(Props[Labeller], name ="Labeller")
+	val selector = context.actorOf(Props[Selector],name ="Selector")
 	var tweetCount=0;
 	
-	override def preStart ={
+	/*override def preStart ={
 		//streamer.stream.sample
 	}
-
+*/
 	def receive  = {
 		case Stream(terms) => streamer.stream.filter(getQuery(terms))
 		case Shutdown => {
@@ -92,19 +151,17 @@ class StreamManager extends Actor with ActorLogging with TermFilter
 		//println(fullStatus.status.getText)
 		tweetCount = tweetCount +1
 		
-		counter ! fullStatus
 		labeller ! fullStatus
-		//selector ! fullStatus
+		selector ! fullStatus
 		locator ! fullStatus		
 		
 		}
 	}
 
-
-
 }
 
-class Labeller extends Actor with ActorLogging
+
+class Selector extends TweetWriter("tweets.txt") with Actor with ActorLogging
 {
 	import GameAnalyst._
 	import MessageStore._;
@@ -120,7 +177,6 @@ class Labeller extends Actor with ActorLogging
 	def receive = {
 		case fullstatus : FullStatus => 
 		{
-			println("rvd here")
 			if(Tweet.getLanguage(fullstatus) == "en" && !fullstatus.status.isRetweet && fullstatus.status.getMediaEntities.length == 0)
 			{
 				val normalizedTweet = English.removeNonLanguage(Tweet.normalize(fullstatus.status.getText));
@@ -130,7 +186,7 @@ class Labeller extends Actor with ActorLogging
 				
 				if(Math.random <=0.7 && Twokenize(normalizedTweet).length > 3)
 				{
-					println("pushed to aggregator")
+					write(entry);
 					aggregator ! TaggedTweet(tag,normalizedTweet);
 				}
 
@@ -142,8 +198,15 @@ class Labeller extends Actor with ActorLogging
 
 		case Shutdown => {
 			context.stop(self)
-		}	
+		}
+		
 	}
+	def write(entry:String) 
+	{
+		wr.write(entry + "\n");
+		wr.flush
+	}
+	override def postStop =closeWriter	
 }
 
 class Aggregator extends Actor with ActorLogging
@@ -151,15 +214,16 @@ class Aggregator extends Actor with ActorLogging
 	val tweetsPot = scala.collection.mutable.ArrayBuffer[String]()
 	var prevTag = "";
 	def receive ={
-		case TaggedTweet(tag:String,tweet:String) => {
-			println("revd from labeller")
-			if(tag == prevTag)
+		case TaggedTweet(tag:String,tweet:String) => 
+		{
+			//println("collecting tweets ........");
+			if(tag == prevTag || prevTag=="")
 				tweetsPot.append(tweet);
 			else
 			{
-				println("sending for processing")
-				context.actorFor("../../../Summarizer")! Payload(tweetsPot.map(x=>x))
-				//SentimentAnalyzer ! Payload(tweetsPot.map(_))
+				println("sending for processing.....")
+				context.actorFor("../../../Summarizer") ! Payload(tweetsPot.map(x=>x).toIndexedSeq)
+				context.actorFor("../../../SAnalyzer") ! Payload(tweetsPot.map(x=>x).toIndexedSeq)
 			}
 			prevTag = tag
 		}
@@ -168,82 +232,52 @@ class Aggregator extends Actor with ActorLogging
 
 class Summarizer extends Actor with ActorLogging
 {
+	import footballTwitter.util.English
+
 	def receive ={
-		case Payload(tweetList:ArrayBuffer[String]) => {
-			println("here received payload");
-			println(tweetList.length)
+		case Payload(tweetList:IndexedSeq[String]) => {
+			println("Now summarizing tweets....");
+			val filteredTweets = summarizationFilter(tweetList);
+			//tweetList.foreach(println)
+			println("--------------------");
+			//filteredTweets.foreach(println);
+			println("@@@@@@@@@@@@@@@@@@@@@@");
+			val summaries = Summarizer(filteredTweets)
+			.map(tweet=> tweet._1)
+
+			summaries.foreach(println);
+			context.actorFor("../Renderer") ! Summary(summaries);
+
 		}
+	}
+
+	def summarizationFilter(tweetList:IndexedSeq[String]): IndexedSeq[String] ={
+		val taggedTokens = tweetList
+		.map(tweet => Tagger(tweet))
+
+		val filteredTweets = tweetList.filter(tweet => !English.isImperative(tweet) && English.isSafe(tweet) && !English.isPersonal(tweet))
+		filteredTweets
 	}
 }
 
-class SAnalyzer extends Actor with ActorLogging
+class SAnalyzer(players:List[String]) extends Actor with ActorLogging
 {
-	// issue one is how do I specify the player names.. I guess I would neeed to do do oti for all players
+	
 	def receive = {
-		case Payload => {
-			//now extract the list and perform sentiment analyzsis
+		case Payload(tweetList:IndexedSeq[String]) => {
+			
+			//println("Ananlyzing player scores.....");
+			val playersScore:Map[String,Double]=SAnalyzer(players,tweetList);
+			context.actorFor("../Renderer") ! PlayerScores(playersScore);
+			//println(playersScore)
 		}
 	}
 }
 
 
-class SummarizationCandidates extends Actor with ActorLogging
-{
-	import GameAnalyst._;
-	import MessageStore._;
-	import footballTwitter.util.English;
-	import footballTwitter.util.SimpleTokenizer;
-	import java.io.PrintWriter
-	import footballTwitter.util.Tweet._;
-
-	val candidates = scala.collection.mutable.HashSet[String]()
-
-	def receive ={
-		case fullstatus:FullStatus =>{
-			val text = fullstatus.status.getText
-
-			admissable(fullstatus) match {
-				case Some(text) => println(text);candidates += text
-				case None => //println("");
-			}
-
-		}
-
-		if(candidates.size > 500)
-		{
-			val wr = new PrintWriter("candidates.txt");
-
-			candidates.foreach { line=>
-				wr.write(line  +"\n");
-			}
-			wr.close
-			context.stop(self)
-
-		}
-		println(candidates.size)
-	}
-
-	def admissable(fullstatus:FullStatus):Option[String] ={
-		val tweet = fullstatus.status.getText
-
-		val content = if(English.isEnglish(tweet) && !tweet.contains("quote") 
-			&& Tweet.getLanguage(fullstatus).equals("en")) 
-		{
-			SimpleTokenizer(English.removeNonLanguage(tweet))
-			.filterNot(_.contains('/'))
-			.mkString(" ")
-		}
-		else ""
-
-		if(SimpleTokenizer(content).length > 4)
-		Some(content)
-		else
-		None
-	}
-}
 
 
-class Counter extends Actor with ActorLogging {
+class Labeller extends Actor with ActorLogging {
 	import GameAnalyst._
 	import scala.concurrent.duration._
 	import scala.concurrent.ExecutionContext
@@ -277,16 +311,17 @@ class Counter extends Actor with ActorLogging {
 		 if(current - old > threshold)  
 		 {
 		 	switch = switch+1
-		 	context.actorFor("../Labeller") ! Label("Burst"+"-"+minute,current,minute)
+		 	context.actorFor("../Selector") ! Label("Burst"+"-"+minute,current,minute)
 		 }
 
 		 else
-		 	context.actorFor("../Labeller") ! Label("Normal"+"-"+minute,current,minute)
+		 	context.actorFor("../Selector") ! Label("Normal"+"-"+minute,current,minute)
 
 		 counter=0;
 		}
 	}
 }
+
 
 abstract class TweetWriter(fileName:String) {
 	import java.io.FileWriter
@@ -339,8 +374,21 @@ Uses Scallop
 
 class Conf(arguements:Seq[String]) extends ScallopConf(arguements) 
 {
-	
+	banner("""
+			Twitter Soccer Streaming
+	For usagse see below :
+
+	-t --terms <arg>	The terms associated with the game that will be streamed
+						For example if you want to stream a game between FcBarcelona and AC Milan
+						then possible terms can be "fcb" "acmilan" "acm" "barcelona"
+
+	-p --players <arg>  The players whose ratings have to  be monitored in real time
+ 
+		""")
+
+	version(""" Version 0.2 2013 """);
 	val terms = opt[List[String]]("terms",descr="The terms that you need to stream");
-	val ids = opt[List[String]]("ids",descr = "the user ids which you want to stream");
+	val players = opt[List[String]]("players",descr="The List of players who u want to follow");
+
 } 
 

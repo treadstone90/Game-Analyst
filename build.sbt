@@ -4,7 +4,7 @@ version := "0.1.5-SNAPSHOT"
 
 organization := "edu.utexas"
 
-scalaVersion := "2.10.0"
+scalaVersion := "2.10.1"
 
 crossPaths := false
 

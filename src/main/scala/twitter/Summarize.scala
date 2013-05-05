@@ -49,7 +49,7 @@ object Main{
 		val IDFMap = IDF(vocabulary,tweetMaps);
 
 		val featureVectors = tweetMaps
-		.map(x=> Vector.getFeatureVector(vocabulary,x,IDFMap))
+		.map(x=> Vector(vocabulary,x,IDFMap))
 
 		
 		
@@ -84,6 +84,8 @@ object Main{
 		}
 		val rerankedTweets = rankedTweets.sortBy(x=> x._2).reverse
 
+		println("ranked tweets are")
+		println(rerankedTweets);
 		rerankedTweets
 
 	}
@@ -114,7 +116,7 @@ object Main{
 // compute the IDF 
 
 object IDF {
-	def apply(vocabulary:IndexedSeq[String], documents: IndexedSeq[Map[String,Int]]) : Map[String,Double]=
+		def apply(vocabulary:IndexedSeq[String], documents: IndexedSeq[Map[String,Int]]) : Map[String,Double]=
 	{
 		val IDFMap= scala.collection.mutable.Map[String,Double]()
 		.withDefaultValue(0);
@@ -131,7 +133,7 @@ object IDF {
 
 // get the TF IDF feature vector
 object Vector {
-	def getFeatureVector(vocabulary:IndexedSeq[String],document: Map[String,Int],IDFMap:Map[String,Double]) ={
+	def apply(vocabulary:IndexedSeq[String],document: Map[String,Int],IDFMap:Map[String,Double]) ={
 		val vector = new ArrayRealVector(vocabulary.size)
 
 		var index=0;
