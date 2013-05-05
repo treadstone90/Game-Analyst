@@ -83,6 +83,8 @@ object SAnalyzer
 		val playerScores = scala.collection.mutable.Map[String,Double]().withDefaultValue(0.5);
 		players.foreach { player =>
 			val playerTweets:Seq[String] = tweetList.filter(_.contains(player));
+			println(player + ":")
+			playerTweets.foreach(println)
 			val tokenizedTweets = playerTweets.map(tweet => Twokenize(tweet))
 			val tweetsSentiment = tokenizedTweets.map{ tweet =>
 				val positive = tweet.count(English.posWords)

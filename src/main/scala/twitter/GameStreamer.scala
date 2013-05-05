@@ -84,7 +84,7 @@ class Renderer extends Actor with ActorLogging {
 		case Summary(candidates:IndexedSeq[String]) => {
 			println("1got payload");
 			
-			if(summary.length ==0)
+			if(summary.length ==0 && candidates.length >0)
 			{
 				summary += candidates.head;
 				wrSum.write(candidates.head + "\n")
@@ -106,7 +106,7 @@ class Renderer extends Actor with ActorLogging {
 
 		case PlayerScores(playerScores: Map[String,Double]) => {
 			playerScores.foreach{ case(key,value) => 
-				wrSenti.write(key + ";" + value);
+				wrSenti.write(key + ";" + value +"\n");
 				wrSenti.flush
 			}
 		}
@@ -121,7 +121,7 @@ class Renderer extends Actor with ActorLogging {
 
 	}
 
-	override def postStop = wrSum.close ; wrSenti.close
+	//override def postStop = wrSum.close ; wrSenti.close
 }
 
 class StreamManager extends Actor with ActorLogging with TermFilter
@@ -134,6 +134,7 @@ class StreamManager extends Actor with ActorLogging with TermFilter
 	val labeller = context.actorOf(Props[Labeller], name ="Labeller")
 	val selector = context.actorOf(Props[Selector],name ="Selector")
 	var tweetCount=0;
+	var fileName="";
 	
 	/*override def preStart ={
 		//streamer.stream.sample
@@ -212,6 +213,7 @@ class Selector extends TweetWriter("tweets.txt") with Actor with ActorLogging
 class Aggregator extends Actor with ActorLogging
 {
 	val tweetsPot = scala.collection.mutable.ArrayBuffer[String]()
+	//val payload = scala.collection.mutable.ArrayBuffer[String]()
 	var prevTag = "";
 	def receive ={
 		case TaggedTweet(tag:String,tweet:String) => 
@@ -222,10 +224,15 @@ class Aggregator extends Actor with ActorLogging
 			else
 			{
 				println("sending for processing.....")
-				context.actorFor("../../../Summarizer") ! Payload(tweetsPot.map(x=>x).toIndexedSeq)
-				context.actorFor("../../../SAnalyzer") ! Payload(tweetsPot.map(x=>x).toIndexedSeq)
+				val payload= tweetsPot.map(x=> new String(x))
+				context.actorFor("../../../Summarizer") ! Payload(payload)
+				context.actorFor("../../../SAnalyzer") ! Payload(payload)
+				tweetsPot.clear
 			}
+
 			prevTag = tag
+			
+
 		}
 	}
 }
@@ -237,7 +244,7 @@ class Summarizer extends Actor with ActorLogging
 	def receive ={
 		case Payload(tweetList:IndexedSeq[String]) => {
 			println("Now summarizing tweets....");
-			val filteredTweets = summarizationFilter(tweetList);
+			val filteredTweets = summarizationFilter(tweetList.toIndexedSeq);
 			//tweetList.foreach(println)
 			println("--------------------");
 			//filteredTweets.foreach(println);
@@ -266,8 +273,8 @@ class SAnalyzer(players:List[String]) extends Actor with ActorLogging
 	def receive = {
 		case Payload(tweetList:IndexedSeq[String]) => {
 			
-			//println("Ananlyzing player scores.....");
-			val playersScore:Map[String,Double]=SAnalyzer(players,tweetList);
+			//println(tweetList)
+			val playersScore:Map[String,Double]=SAnalyzer(players,tweetList.toIndexedSeq);
 			context.actorFor("../Renderer") ! PlayerScores(playersScore);
 			//println(playersScore)
 		}
@@ -285,7 +292,7 @@ class Labeller extends Actor with ActorLogging {
 
 	implicit val ec = ExecutionContext.Implicits.global
 
-	context.system.scheduler.schedule(1000.millis,20000.millis,context.self, Report)
+	context.system.scheduler.schedule(1000.millis,60000.millis,context.self, Report)
 	var minute=0;
 	var counter=0;
 	val threshold = 500;
