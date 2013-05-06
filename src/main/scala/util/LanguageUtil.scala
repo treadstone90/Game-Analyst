@@ -21,6 +21,10 @@ import scala.collection.JavaConversions._;
  * limitations under the License.
  */
 
+ /**
+  * Also contains a wrapper for the CMU POSTagger 
+  */
+
 /**
  * A helper object for creating Scala Source instances given a
  * the location of a resource in the classpath, which includes
@@ -304,7 +308,7 @@ abstract class OtherLexica (code: String) {
 
 
 
-// The CMU POSTAGGER
+/** CMU POsTager  */
 class Tagger(fileName:String) {
   var model:Model =null;
   var featureExtractor : FeatureExtractor =null;

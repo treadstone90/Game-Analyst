@@ -10,12 +10,11 @@ import chalk.lang.eng.Twokenize;
 import footballTwitter.util.English;
 import footballTwitter.util.TweetInfo;
 
-/* We are gonna have a  set of sentiment analyzers
-starrting with the most basic one, which is just based on lexison
-*/
 
 
-object SentimentAnalyzer
+/** A Sentiment Analyzer object for Demonstration and offline vevaluation */
+
+object SentimentAnalyzerOffline
 {
 	def main(args:Array[String])
 	{
@@ -88,7 +87,7 @@ object SentimentAnalyzer
 
 
 
-
+/* Objetc for handling tje commnad line arguements */
 object SentimentOpts {
 import org.rogach.scallop._;
 
@@ -107,7 +106,6 @@ object Filter {
 	def stripTweets(tweet:String)= 
 	{
 		val filtered = English.removeNonLanguage(tweet);
-		//println(filtered);
 		filtered
 	}	
 }
