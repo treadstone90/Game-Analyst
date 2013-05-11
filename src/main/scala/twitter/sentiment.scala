@@ -12,7 +12,7 @@ import footballTwitter.util.TweetInfo;
 
 
 
-/** A Sentiment Analyzer object for Demonstration and offline vevaluation */
+/** A Sentiment Analyzer object for Demonstration and offline evaluation */
 
 object SentimentAnalyzerOffline
 {

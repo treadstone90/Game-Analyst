@@ -132,6 +132,7 @@ class StreamManager extends Actor with ActorLogging with TermFilter {
   import GameAnalyst._;
   import MessageStore._
 
+
   val streamer = new Streamer(context.self);
   val locator = context.actorOf(Props[Locator], name = "Locator")
   val labeller = context.actorOf(Props[Labeller], name = "Labeller")
@@ -289,23 +290,25 @@ abstract class TweetWriter(fileName: String) {
 
 class Locator extends TweetWriter("location.txt") with Actor with ActorLogging {
   import MessageStore._
+
   import footballTwitter.util.Tweet._;
 
   val placeMap = scala.collection.mutable.Map[String, Int]().withDefaultValue(0);
+  val geoNames = new GeoNames("treadstone90")
   def receive = {
-    case fullStatus: FullStatus => {
-      val place = fullStatus.status.getPlace;
-      val user = fullStatus.status.getUser
-
-      val country = if (place != null)
-        place.getCountry.toLowerCase.trim
-
-      else if (user != null && user.getLocation.trim.length > 0)
-        user.getLocation.toLowerCase.trim
-      else
-        Tweet.getLanguage(fullStatus);
-
-      write(fullStatus.status.getId + "~~~~~~~~" + country);
+    case fullStatus: FullStatus =>{
+      val location = Option(fullStatus.status.getGeoLocation) match {
+        case Some(geo:GeoLocation) => Some(LocationConfidence(geo.getLatitude,geo.getLongitude,1.0))
+        case None => 
+          Option(fullStatus.status.getUser) match {
+            case Some(user:User) => geoNames.locatePlaceByName(fullStatus.status.getUser.getLocation)
+            case None => None
+        }
+      }
+      location match {
+        case Some(loc) => write(loc.latitude+":"+loc.longitude + "\n");
+        case None => 
+      } 
     }
   }
 
