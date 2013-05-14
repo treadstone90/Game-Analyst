@@ -29,5 +29,6 @@ libraryDependencies ++= Seq(
   "org.rogach" %% "scallop" % "0.8.1",
   "org.parboiled" % "parboiled-scala" % "1.0.0",
   "io.spray" %%  "spray-json" % "1.2.3",
-  "org.apache.commons" % "commons-math3" % "3.0"
+  "org.apache.commons" % "commons-math3" % "3.0",
+  "jdom" % "jdom" % "1.0"
 )

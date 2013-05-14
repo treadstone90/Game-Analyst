@@ -30,7 +30,7 @@ object MessageStore {
   case class PlayerScores(playerScores: Map[String, Double])
 }
 
-/** The Actor System TF-Pundit. The "supervisor" actor - Manager is initilized here */
+/** The Actor System TF-Pundit. The "supervisor" actor - Manager is initialized here */
 
 object GameAnalyst {
 
@@ -54,6 +54,7 @@ object GameAnalyst {
  *	1) Summarizer
  *	2) Sentiment Analyzer
  *	3) Renderer
+ * @param the list of players to be analyzed.
 */
 class Manager(players: List[String]) extends Actor with ActorLogging {
   import GameAnalyst._;
@@ -140,7 +141,12 @@ class StreamManager extends Actor with ActorLogging with TermFilter {
   var tweetCount = 0;
   var fileName = "";
 
-  
+  /* Receives messages from the Manager and processes them
+   * Message 1) Stream - start streaming tweets
+   * Message 2) Shutdown - stop streaming tweets
+   * Message 3) FullStatus - Passes messages to its worker actors
+   */
+
   def receive = {
     case Stream(terms) => streamer.stream.filter(getQuery(terms))
     case Shutdown => {
@@ -174,6 +180,12 @@ class Selector extends TweetWriter("tweets.txt") with Actor with ActorLogging {
   var count: Int = 0;
   var gameMinutes = 0;
   val aggregator = context.actorOf(Props[Aggregator], name = "Aggregator")
+
+  /* Receives messages from the Manager and processes them
+   * Message 1) Label - Label the tweets 
+   * Message 2) Shutdown - stop actor
+   * Message 3) FullStatus - Filter and Tag tweets
+   */  
 
   def receive = {
     case fullstatus: FullStatus =>
@@ -213,6 +225,10 @@ class Selector extends TweetWriter("tweets.txt") with Actor with ActorLogging {
 class Aggregator extends Actor with ActorLogging {
   val tweetsPot = scala.collection.mutable.ArrayBuffer[String]()
   var prevTag = "";
+  
+  /* Receives messages from the Manager and processes them
+   * Message 1) TaggedTweet - Collect all tweets in a "pot" , package them and send the payload to Summarizer and Performance Analyzer
+   */
   def receive = {
     case TaggedTweet(tag: String, tweet: String) =>
       {
@@ -249,6 +265,11 @@ class Labeller extends Actor with ActorLogging {
   var old = 0;
   var switch = 0;
 
+  /** Recieve the following messages 
+   * 1) fullStatus : incremnt counter 
+   * 2) Report : Send Label to Selector with the  the number of tweets in interval and timestamp
+   */
+
   def receive = {
 
     case fullStatus: FullStatus => {
@@ -275,9 +296,16 @@ class Labeller extends Actor with ActorLogging {
   }
 }
 
+/** An abstract class that writes to a file 
+ *  @param the list of players to be analyzed.
+ */
 abstract class TweetWriter(fileName: String) {
   import java.io.FileWriter
   val wr = new FileWriter(fileName)
+  /** Write text file specified in fileName
+   * @param : text to write
+   * return None
+   */  
   def write(entry: String)
 
   def closeWriter() = wr.close;
@@ -285,7 +313,7 @@ abstract class TweetWriter(fileName: String) {
 }
 
 /** The Locator class used to get the geoCordinates of a tweet 
- * The current implementation is incomplete
+ *
 */
 
 class Locator extends TweetWriter("location.txt") with Actor with ActorLogging {
@@ -295,6 +323,11 @@ class Locator extends TweetWriter("location.txt") with Actor with ActorLogging {
 
   val placeMap = scala.collection.mutable.Map[String, Int]().withDefaultValue(0);
   val geoNames = new GeoNames("treadstone90")
+
+  /** Receives the following Messages
+   * 1) fullStatus : geoTag the tweets
+   */
+
   def receive = {
     case fullStatus: FullStatus =>{
       val location = Option(fullStatus.status.getGeoLocation) match {
@@ -306,7 +339,7 @@ class Locator extends TweetWriter("location.txt") with Actor with ActorLogging {
         }
       }
       location match {
-        case Some(loc) => write(loc.latitude+":"+loc.longitude + "\n");
+        case Some(loc) => write(loc.latitude+";"+loc.longitude + "\n");
         case None => 
       } 
     }

@@ -7,3 +7,6 @@ target/
 *~
 twitter4j.properties
 streamedGames/
+src/main/scala/twitter/test.scala
+src/main/scala/twitter/UserTest.scala
+
