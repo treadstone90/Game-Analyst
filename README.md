@@ -10,24 +10,34 @@ This will be a set of tools that can be used to analyze live football(soccer) ma
 
 ## Building the system from source
 
-tf-pundit uses SBT (Simple Build Tool) with a standard directory
+TF-pundit uses SBT (Simple Build Tool) with a standard directory
 structure.  
 
-  $ ./build update compile
-  
-  
+  `./build update compile`
 
-##Summarization
 
-To run key in words that are relvant to a soccer game in "terms to be summarized"
-Replace players with the player whose performance is to be monitored
+##Summarization and Player Performance Analyzer
 
-$ bin/fanalyst run footballTwitter.twitter.GameAnalyst -t "terms to be summarized" -p "players"
+These are the two components of the system that have currently been implemented. To use this, first identify the keywords
+associated with a particular game. For example, for a game between `AC Milan and Catania` the keywords maybe `acm, acmilan,catania,acmcatania,milancatania`
 
-Example : bin/fanalyst run footballTwitter.twitter.GameAnalyst -t "milan" "barca" "acm" "barca" -p "messi" "balotelli" "xavi"
+To run TF-Pundit :
 
-The current implementation produces text files having the summary in rtSummary.txt
-and the sentiment associated with the players in scores.txt. The files are updates every minute
+`$ bin/fanalyst run footballTwitter.twitter.GameAnalyst -t "game keywords" -p "players to follow"`
+
+Replace `players to follow` with the player whose performance is to be monitored
+
+Example : 
+
+`bin/fanalyst run footballTwitter.twitter.GameAnalyst -t "milan" "barca" "acm" "barca" -p "messi" "balotelli" "xavi"`
+
+The above command can be used to follow a game betweebn AC Milan and FC Barcelona. The players who will be analyzed are
+`messi balotelli and xavi`
+
+The current implementation produces text files having the summary in `rtSummary.txt`
+and the sentiment associated with the players in `scores.txt`. 
+
+The tweets location(geo-coordinates) are also written to `location.txt`
 
 
 
