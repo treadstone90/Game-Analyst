@@ -5,6 +5,7 @@ target/
 .cache
 .ensime*
 *~
+*.txt
 twitter4j.properties
 streamedGames/
 src/main/scala/twitter/test.scala
